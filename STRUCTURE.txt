@@ -1,0 +1,131 @@
+kenchislove/
+├── .claude/
+│   └── settings.local.json
+├── cool/
+│   └── cute.jpg
+├── frontend/
+│   ├── public/
+│   │   └── images/
+│   │       ├── absolute_unit.png
+│   │       ├── basic_bird.png
+│   │       ├── bouncy_bunny.png
+│   │       ├── clumsy_chicken.png
+│   │       ├── confused_crab.png
+│   │       ├── cosmic_capybara.png
+│   │       ├── derpy_dog.png
+│   │       ├── disco_duck.png
+│   │       ├── eternal_egg.png
+│   │       ├── funky_frog.png
+│   │       ├── galaxy_goat.png
+│   │       ├── grumpy_cat.png
+│   │       ├── lazy_lizard.png
+│   │       ├── mysterious_mongoose.png
+│   │       ├── neon_narwhal.png
+│   │       ├── odd_octopus.png
+│   │       ├── peculiar_platypus.png
+│   │       ├── plain_penguin.png
+│   │       ├── sleepy_sloth.png
+│   │       ├── sneaky_snail.png
+│   │       ├── spooky_spider.png
+│   │       ├── turbo_turkey.png
+│   │       ├── wobble_worm.png
+│   │       └── wobbly_walrus.png
+│   ├── src/
+│   │   ├── api/
+│   │   │   └── client.js
+│   │   ├── components/
+│   │   │   ├── Chat.jsx
+│   │   │   ├── Navbar.jsx
+│   │   │   ├── PageWrapper.jsx
+│   │   │   ├── ProtectedRoute.jsx
+│   │   │   └── Toast.jsx
+│   │   ├── context/
+│   │   │   ├── AuthContext.jsx
+│   │   │   └── ToastContext.jsx
+│   │   ├── pages/
+│   │   │   ├── Inventory.jsx
+│   │   │   ├── Leaderboard.jsx
+│   │   │   ├── Login.jsx
+│   │   │   ├── Profile.jsx
+│   │   │   ├── Register.jsx
+│   │   │   ├── Roll.jsx
+│   │   │   ├── Shop.jsx
+│   │   │   └── Trades.jsx
+│   │   ├── utils/
+│   │   │   ├── characters.js
+│   │   │   ├── cn.js
+│   │   │   ├── gameData.js
+│   │   │   ├── rarity.js
+│   │   │   └── sounds.js
+│   │   ├── App.jsx
+│   │   ├── index.css
+│   │   └── main.jsx
+│   ├── index.html
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── postcss.config.js
+│   ├── skills-lock.json
+│   ├── tailwind.config.js
+│   └── vite.config.js
+├── images/
+│   ├── absolute_unit.png
+│   ├── basic_bird.png
+│   ├── bouncy_bunny.png
+│   ├── clumsy_chicken.png
+│   ├── confused_crab.png
+│   ├── cosmic_capybara.png
+│   ├── derpy_dog.png
+│   ├── disco_duck.png
+│   ├── eternal_egg.png
+│   ├── funky_frog.png
+│   ├── galaxy_goat.png
+│   ├── grumpy_cat.png
+│   ├── lazy_lizard.png
+│   ├── mysterious_mongoose.png
+│   ├── neon_narwhal.png
+│   ├── odd_octopus.png
+│   ├── peculiar_platypus.png
+│   ├── plain_penguin.png
+│   ├── sleepy_sloth.png
+│   ├── sneaky_snail.png
+│   ├── spooky_spider.png
+│   ├── turbo_turkey.png
+│   ├── wobble_worm.png
+│   └── wobbly_walrus.png
+├── server/
+│   ├── routers/
+│   │   ├── __init__.py
+│   │   ├── auth.py
+│   │   ├── chat.py
+│   │   ├── drops.py
+│   │   ├── inventory.py
+│   │   ├── leaderboard.py
+│   │   ├── players.py
+│   │   ├── roll.py
+│   │   ├── rolls.py
+│   │   ├── shop.py
+│   │   └── trades.py
+│   ├── services/
+│   │   ├── __init__.py
+│   │   ├── roll_service.py
+│   │   └── trade_service.py
+│   ├── .env
+│   ├── .env.example
+│   ├── README.md
+│   ├── auth.py
+│   ├── cache.py
+│   ├── config.py
+│   ├── database.py
+│   ├── dependencies.py
+│   ├── game_data.py
+│   ├── limiter.py
+│   ├── main.py
+│   ├── models.py
+│   ├── requirements.txt
+│   ├── schema.sql
+│   └── schemas.py
+├── case_opener.py
+├── characters.py
+├── inventory.json
+├── make_placeholders.py
+└── save.json

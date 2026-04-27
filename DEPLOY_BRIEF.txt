@@ -1,0 +1,241 @@
+================================================================================
+ROLL DA NEWMAN — DEPLOYMENT BRIEFING FOR AI AGENT
+================================================================================
+
+You are being asked to help deploy this project. Read this whole file first.
+The repo root is the directory this file lives in.
+
+--------------------------------------------------------------------------------
+1. WHAT THE PROJECT IS
+--------------------------------------------------------------------------------
+"Roll Da Newman" — a multiplayer gacha "open a case" web game.
+
+- 17 rarities (Common → Singularity ~1-in-93,000,000), 42 characters.
+- Players roll cases, earn coins, build inventories, trade with other users,
+  see leaderboards, chat in a global live chat.
+- Two clients exist in the repo. Only the WEB client is being deployed.
+  The pygame desktop client (case_opener.py, characters.py, save.json,
+  inventory.json) is legacy / single-player and is NOT part of the deploy.
+
+--------------------------------------------------------------------------------
+2. STACK
+--------------------------------------------------------------------------------
+Backend  (server/):
+  - FastAPI (async)
+  - SQLAlchemy 2 async + asyncpg
+  - PostgreSQL 15+
+  - JWT auth (python-jose) + bcrypt (passlib)
+  - slowapi rate limiting
+  - WebSocket live chat (in-process broadcast)
+  - In-memory TTL cache for leaderboards (cache.py)
+
+Frontend (frontend/):
+  - Vite + React 18
+  - React Router, framer-motion, sonner toasts, Tailwind CSS,
+    canvas-confetti, clsx, tailwind-merge
+
+DB schema is created automatically by SQLAlchemy on first startup
+(database.init_db() runs Base.metadata.create_all + idempotent
+ALTER TABLE … ADD COLUMN IF NOT EXISTS migrations + character seed).
+
+--------------------------------------------------------------------------------
+3. PROJECT LAYOUT (deploy-relevant only)
+--------------------------------------------------------------------------------
+server/
+  main.py             FastAPI app entry, CORS, body-size middleware, routers
+  config.py           pydantic-settings (DATABASE_URL, SECRET_KEY, etc.)
+  database.py         async engine, session factory, init_db, character seed
+  models.py           SQLAlchemy models (User, Character, Inventory, Upgrades,
+                      Stats, RollLog, Trade, TradeItem)
+  schemas.py          Pydantic request/response models (extra="forbid")
+  auth.py             bcrypt + JWT helpers
+  dependencies.py     get_current_user FastAPI dependency
+  game_data.py        rarity table + server-side RNG
+  cache.py            in-memory TTL dict (leaderboard cache)
+  limiter.py          shared slowapi Limiter
+  routers/            auth, roll, inventory, shop, leaderboard, players,
+                      trades, drops, rolls, chat (WebSocket)
+  services/           roll_service.py, trade_service.py
+  requirements.txt
+  schema.sql          reference SQL only (not used; SQLAlchemy creates tables)
+  README.md           detailed API reference + security notes
+
+frontend/
+  index.html
+  package.json        Vite scripts: dev / build / preview
+  vite.config.js
+  tailwind.config.js
+  postcss.config.js
+  src/
+    main.jsx
+    App.jsx           BrowserRouter + ProtectedRoute wiring
+    api/client.js     fetch wrapper, hardcoded http://localhost:8000  ← must change
+    components/Chat.jsx  WebSocket client, hardcoded ws://localhost:8000  ← must change
+    components/{Navbar,PageWrapper,ProtectedRoute,Toast}.jsx
+    context/{AuthContext,ToastContext}.jsx
+    pages/{Login,Register,Roll,Inventory,Shop,Leaderboard,Profile,Trades}.jsx
+    utils/{rarity,gameData,cn,sounds,characters}.js
+  public/images/      character art (PNGs)
+
+images/               same character art, also used by the pygame client
+STRUCTURE.txt         full tree of the repo
+
+--------------------------------------------------------------------------------
+4. DEPLOYMENT PLAN (DECIDED)
+--------------------------------------------------------------------------------
+- Backend + Postgres:  Railway (one project, two services).
+- Frontend (Vite SPA): Cloudflare Pages OR Vercel (user will choose; either works).
+- Budget: paying tier is fine. No free-tier cold-start tolerance needed.
+
+Why this plan:
+  * Railway keeps backend + Postgres on the same private network — no
+    Neon-style external connection string + SSL juggling.
+  * Railway does not spin down paid services, so the WebSocket chat stays
+    connected and roll endpoints have no cold-start latency.
+  * Cloudflare Pages / Vercel are best-in-class for Vite static builds
+    (CDN, automatic HTTPS, GitHub auto-deploy).
+
+--------------------------------------------------------------------------------
+5. KNOWN ISSUES THAT MUST BE FIXED BEFORE DEPLOY
+--------------------------------------------------------------------------------
+A. DATABASE_URL scheme.
+   config.py defaults to "postgresql+asyncpg://...". Railway's Postgres
+   plugin exposes DATABASE_URL as "postgresql://...". You must either:
+     - rewrite the URL in config.py at load time
+       (replace "postgresql://" prefix with "postgresql+asyncpg://"), or
+     - set DATABASE_URL env var in Railway with the asyncpg prefix
+       (less robust if Railway rotates it).
+   asyncpg also does NOT accept the "?sslmode=require" query param;
+   strip it if Railway includes it (Railway's internal URL usually doesn't).
+
+B. CORS is wide open.
+   server/main.py: allow_origins=["*"] AND allow_methods=["*"].
+   For production, replace with the deployed frontend origin
+   (e.g. ["https://kenchislove.pages.dev"]) and consider
+   allow_credentials=False since the wildcard origin currently forbids it.
+
+C. Hardcoded backend URL in the frontend.
+     frontend/src/api/client.js          → const BASE = 'http://localhost:8000'
+     frontend/src/components/Chat.jsx    → HTTP_BASE / WS_BASE constants
+   Refactor these to read from import.meta.env.VITE_API_BASE and
+   VITE_WS_BASE so the same build can be configured per environment.
+   Set VITE_API_BASE / VITE_WS_BASE in Cloudflare Pages / Vercel.
+
+D. SECRET_KEY default.
+   config.py default is "CHANGE_ME_IN_PRODUCTION". A real value MUST be
+   set in Railway env vars. Generate with:
+     python -c "import secrets; print(secrets.token_hex(32))"
+
+E. Single-instance only.
+   cache.py and routers/chat.py keep state in-process (TTL dict and
+   chat history deque). Running >1 backend replica will cause:
+     - inconsistent leaderboard cache between requests
+     - chat messages only broadcast to the replica that received them
+   Keep replicas = 1. If horizontal scaling is needed later, swap
+   cache.py for Redis and run chat through Redis pub/sub.
+
+F. No Procfile / start command yet.
+   Railway will auto-detect Python but needs a start command. Use:
+     uvicorn main:app --host 0.0.0.0 --port $PORT
+   Set Railway's Root Directory to "server/" so requirements.txt
+   resolves correctly.
+
+G. WebSocket URL must use wss:// in production.
+   Chat.jsx currently hardcodes "ws://". Once it reads from env, point
+   VITE_WS_BASE at "wss://<your-backend>.railway.app".
+
+H. Body-size middleware in main.py rejects request bodies > 32 KB.
+   This is intentional (DoS hardening); just don't be surprised if
+   large requests 413.
+
+I. Rate limit is per-IP via slowapi (60 rolls/min). Behind Railway's
+   proxy, slowapi.util.get_remote_address may see a proxy IP unless
+   the X-Forwarded-For header is honored. Either trust proxy headers
+   or accept the current behavior — it's not a deploy blocker.
+
+--------------------------------------------------------------------------------
+6. THE DEPLOY STEPS, AT A GLANCE
+--------------------------------------------------------------------------------
+Backend on Railway:
+  1. Create Railway project, add Postgres plugin.
+  2. Create a new service → Deploy from GitHub repo, set Root Directory to server/.
+  3. Set env vars: DATABASE_URL (rewrite scheme), SECRET_KEY (random hex).
+  4. Set start command: uvicorn main:app --host 0.0.0.0 --port $PORT
+  5. Trigger deploy. init_db() will create tables and seed characters
+     on first startup; check logs for errors.
+  6. Confirm /health returns {"status":"ok"} on the public URL.
+
+Frontend on Cloudflare Pages (or Vercel):
+  1. Connect repo, set Root Directory to frontend/.
+  2. Build command:  npm run build
+  3. Output directory:  dist
+  4. Env vars: VITE_API_BASE=https://<backend>.railway.app
+              VITE_WS_BASE=wss://<backend>.railway.app
+  5. After first deploy, update backend CORS allow_origins with the
+     Pages/Vercel URL and redeploy backend.
+
+--------------------------------------------------------------------------------
+7. SECURITY NOTES (already in place — don't undo any of these)
+--------------------------------------------------------------------------------
+- Roll RNG runs entirely server-side (services/roll_service.py).
+  The client never sends a roll result.
+- Coin updates only happen in /roll and /shop/buy; DB CHECK enforces
+  coins >= 0.
+- Trade accepts use SELECT ... FOR UPDATE on the trade row + relevant
+  inventory rows for atomic ownership-checked swaps.
+- All request bodies validated by Pydantic with extra="forbid".
+- Username/password regex + length bounds in schemas.py.
+- avatar_url enforced to http(s):// scheme.
+- Control characters stripped from chat / bio text.
+- Per-socket chat rate limit (1 msg / 1.0s).
+- 32 KB request body cap.
+
+--------------------------------------------------------------------------------
+8. FILES YOU SHOULD ASK THE USER TO ATTACH ALONGSIDE THIS BRIEF
+--------------------------------------------------------------------------------
+You can read the repo directly if you have shell access — but if you
+only get attached files, request these (they cover everything you need
+to make the deploy changes without surprises):
+
+  REQUIRED:
+    server/main.py
+    server/config.py
+    server/database.py
+    server/requirements.txt
+    server/routers/chat.py            (WebSocket entry; affected by CORS/WSS)
+    frontend/package.json
+    frontend/vite.config.js
+    frontend/src/api/client.js        (hardcoded localhost — must change)
+    frontend/src/components/Chat.jsx  (hardcoded ws://localhost — must change)
+    STRUCTURE.txt
+
+  HELPFUL (only if you want to understand game mechanics):
+    server/README.md
+    server/game_data.py
+    server/models.py
+    server/schemas.py
+    server/services/roll_service.py
+    server/services/trade_service.py
+
+  NOT NEEDED FOR DEPLOY (skip these):
+    case_opener.py, characters.py, make_placeholders.py
+    save.json, inventory.json
+    images/ and frontend/public/images/ (already committed)
+    cool/
+
+--------------------------------------------------------------------------------
+9. WHAT THE USER ACTUALLY WANTS YOU TO DO
+--------------------------------------------------------------------------------
+Help deploy the backend to Railway (with the integrated Postgres) and
+the frontend to Cloudflare Pages or Vercel. Make the code changes
+listed in section 5 (especially A, B, C, D, F, G), commit them, and
+walk the user through the Railway + Pages/Vercel UI setup.
+
+Do NOT introduce Redis, Docker, or Alembic unless the user asks.
+Do NOT touch the pygame files. Do NOT loosen any of the security
+measures in section 7. Keep the diff minimal and focused on what
+the deploy actually needs.
+
+================================================================================
+END OF BRIEF
+================================================================================
