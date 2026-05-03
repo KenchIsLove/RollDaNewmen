@@ -30,8 +30,14 @@ async def init_db() -> None:
         for sql in [
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS bio VARCHAR(300)",
+            "ALTER TABLE users ALTER COLUMN bio TYPE VARCHAR(2000)",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS banner_color VARCHAR(7) NOT NULL DEFAULT '#7c3aed'",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS display_title VARCHAR(60) NOT NULL DEFAULT ''",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS banner_image_url TEXT",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS theme_preset VARCHAR(20) NOT NULL DEFAULT 'midnight'",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS showcase_character_ids JSONB NOT NULL DEFAULT '[]'::jsonb",
             "ALTER TABLE stats ADD COLUMN IF NOT EXISTS rarity_score BIGINT NOT NULL DEFAULT 0",
+            "ALTER TABLE roll_log ADD COLUMN IF NOT EXISTS revealed_at TIMESTAMPTZ",
         ]:
             await conn.execute(text(sql))
 

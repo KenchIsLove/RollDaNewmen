@@ -43,6 +43,7 @@ async def _build_inventory(user_id, db: AsyncSession) -> InventoryOut:
     rows = result.scalars().all()
     items = [
         InventoryItemOut(
+            character_id=row.character.id,
             character_name=row.character.name,
             rarity=row.character.base_rarity,
             count=row.count,

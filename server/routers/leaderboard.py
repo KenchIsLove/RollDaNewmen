@@ -62,7 +62,7 @@ async def _query(board: str, limit: int, db: AsyncSession) -> list[LeaderboardEn
 
     # rarest_char — join to characters to sort by weight (lower = rarer)
     rows = await db.execute(
-        select(User.username, Character.base_rarity, Character.weight)
+        select(User.username, Character.name, Character.base_rarity, Character.weight)
         .join(Stats, Stats.user_id == User.id)
         .join(Character, Character.id == Stats.rarest_owned)
         .where(Stats.rarest_owned.is_not(None))
@@ -70,6 +70,12 @@ async def _query(board: str, limit: int, db: AsyncSession) -> list[LeaderboardEn
         .limit(limit)
     )
     return [
-        LeaderboardEntry(rank=i + 1, username=r.username, value=r.base_rarity)
+        LeaderboardEntry(
+            rank=i + 1,
+            username=r.username,
+            value=r.base_rarity,
+            rarest_character_name=r.name,
+            rarest_character_rarity=r.base_rarity,
+        )
         for i, r in enumerate(rows)
     ]

@@ -3,6 +3,17 @@ export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
   theme: {
     extend: {
+      colors: {
+        base:            '#1a1b23',
+        card:            '#22232d',
+        surface:         '#2d2e3a',
+        line:            '#3d3e4a',
+        accent:          '#f59e42',
+        'text-primary':   '#f4f4f5',
+        'text-secondary': '#b4b4be',
+        'text-muted':     '#8b8b98',
+        'text-dim':       '#6b7280',
+      },
       keyframes: {
         pop: {
           '0%':   { opacity: '0', transform: 'scale(0.75)' },

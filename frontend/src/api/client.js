@@ -20,7 +20,9 @@ async function request(method, path, body) {
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({}))
-    throw new Error(data.detail || `Request failed (${res.status})`)
+    const err = new Error(data.detail || `Request failed (${res.status})`)
+    err.status = res.status
+    throw err
   }
 
   if (res.status === 204) return null
@@ -37,11 +39,13 @@ export const api = {
   leaderboard:     (board, limit = 10)  => request('GET',  `/leaderboard/${board}?limit=${limit}`),
   myProfile:       ()                   => request('GET',  '/players/me'),
   playerProfile:   (username)           => request('GET',  `/players/${username}`),
+  searchPlayers:   (q, limit = 10)      => request('GET',  `/players/search?q=${encodeURIComponent(q)}&limit=${limit}`),
   updateProfile:   (body)               => request('PATCH', '/players/me', body),
   recentDrops:     (limit = 10)         => request('GET',  `/drops/recent?limit=${limit}`),
   myRolls:         (limit = 5)          => request('GET',  `/rolls/me?limit=${limit}`),
   createTrade:     (body)               => request('POST', '/trades', body),
-  listTrades:      ()                   => request('GET',  '/trades'),
+  listTrades:      (tab)                => request('GET',  tab ? `/trades?tab=${tab}` : '/trades'),
+  getTrade:        (id)                 => request('GET',  `/trades/${id}`),
   acceptTrade:     (id)                 => request('POST', `/trades/${id}/accept`),
   declineTrade:    (id)                 => request('POST', `/trades/${id}/decline`),
   cancelTrade:     (id)                 => request('POST', `/trades/${id}/cancel`),

@@ -1,9 +1,9 @@
 import { useToast } from '../context/ToastContext'
 
 const TYPE_STYLES = {
-  success: 'bg-green-950 border-green-700 text-green-200',
-  error:   'bg-red-950  border-red-700   text-red-200',
-  info:    'bg-zinc-800 border-zinc-700   text-gray-200',
+  success: 'bg-card border-green-500 text-green-300',
+  error:   'bg-card border-red-500 text-red-300',
+  info:    'bg-card border-line text-text-secondary',
 }
 
 export default function Toast() {
@@ -16,7 +16,7 @@ export default function Toast() {
           key={toast.id}
           onClick={() => removeToast(toast.id)}
           className={`
-            animate-slideUp border rounded-lg px-4 py-3 text-sm
+            animate-slideUp border-2 rounded-lg px-4 py-3 text-sm
             flex items-start gap-2 shadow-xl max-w-sm
             pointer-events-auto cursor-pointer
             ${TYPE_STYLES[toast.type] ?? TYPE_STYLES.info}

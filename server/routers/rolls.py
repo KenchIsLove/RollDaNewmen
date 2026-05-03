@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
@@ -20,6 +20,10 @@ async def my_rolls(
         select(Character.name, Character.base_rarity)
         .join(RollLog, RollLog.character_id == Character.id)
         .where(RollLog.user_id == user.id)
+        # Match the visibility gate used by /drops/recent — the roller
+        # sees the result via the POST /roll response + animation, not
+        # the history feed.
+        .where(or_(RollLog.revealed_at.is_(None), RollLog.revealed_at <= func.now()))
         .order_by(desc(RollLog.rolled_at))
         .limit(limit)
     )

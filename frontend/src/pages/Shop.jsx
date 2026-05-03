@@ -3,8 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
-import { cn } from '../utils/cn'
 import PageWrapper from '../components/PageWrapper'
+
+const ACCENT = '#f59e42'
 
 function upgradePrice(level) {
   return 500 * Math.pow(2, level)
@@ -26,25 +27,28 @@ function UpgradeCard({ id, label, description, level, coins, onBuy, buying, inde
       initial={{ opacity: 0, x: index % 2 === 0 ? -24 : 24 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ type: 'spring', stiffness: 200, damping: 22, delay: index * 0.1 }}
-      className={cn(
-        'relative bg-zinc-900 border rounded-2xl p-6 overflow-hidden transition-colors duration-300',
-        flash ? 'border-purple-500' : 'border-zinc-800',
-      )}
-      style={flash ? { boxShadow: '0 0 32px rgba(168,85,247,0.35)' } : undefined}
+      className="relative bg-card rounded-2xl p-6 overflow-hidden transition-all duration-300"
+      style={{
+        border: '2px solid #3d3e4a',
+        borderLeftWidth: '4px',
+        borderLeftColor: ACCENT,
+        boxShadow: flash ? `0 0 24px ${ACCENT}55` : undefined,
+      }}
     >
       {flash && (
         <motion.div
-          initial={{ opacity: 0.4 }}
+          initial={{ opacity: 0.18 }}
           animate={{ opacity: 0 }}
           transition={{ duration: 0.6 }}
-          className="absolute inset-0 bg-purple-600/10 pointer-events-none"
+          className="absolute inset-0 pointer-events-none"
+          style={{ backgroundColor: ACCENT }}
         />
       )}
 
       <div className="flex justify-between items-start mb-5">
         <div className="flex-1">
-          <h3 className="text-lg font-bold text-white">{label}</h3>
-          <p className="text-gray-500 text-sm mt-1">{description}</p>
+          <h3 className="text-lg text-text-primary" style={{ fontWeight: 700 }}>{label}</h3>
+          <p className="text-text-muted text-sm mt-1">{description}</p>
         </div>
         <div className="text-right ml-4 shrink-0">
           <AnimatePresence mode="wait">
@@ -54,26 +58,35 @@ function UpgradeCard({ id, label, description, level, coins, onBuy, buying, inde
               animate={{ y: 0,   opacity: 1 }}
               exit={{   y:  12, opacity: 0 }}
               transition={{ type: 'spring', stiffness: 300, damping: 22 }}
-              className="text-3xl font-bold text-purple-400 tabular-nums"
+              className="text-3xl tabular-nums"
+              style={{ color: ACCENT, fontWeight: 800 }}
             >
               {level}
             </motion.div>
           </AnimatePresence>
-          <div className="text-xs text-gray-600 mt-0.5">current level</div>
+          <div className="text-xs text-text-muted mt-0.5">current level</div>
         </div>
       </div>
 
       <div className="flex justify-between items-center">
         <div>
-          <div className="text-yellow-400 font-semibold tabular-nums">{price.toLocaleString()} coins</div>
-          <div className="text-gray-600 text-xs mt-0.5">→ level {level + 1}</div>
+          <div className="tabular-nums" style={{ color: ACCENT, fontWeight: 700 }}>
+            🪙 {price.toLocaleString()} coins
+          </div>
+          <div className="text-text-muted text-xs mt-0.5">→ level {level + 1}</div>
         </div>
         <motion.button
           onClick={handleBuy}
           disabled={buying || !canAfford}
-          whileHover={!buying && canAfford ? { scale: 1.05 } : {}}
-          whileTap={!buying  && canAfford ? { scale: 0.95 } : {}}
-          className="bg-gradient-to-r from-purple-700 to-violet-600 hover:from-purple-600 hover:to-violet-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-5 py-2 rounded-lg text-sm font-medium transition-all"
+          whileHover={!buying && canAfford ? { scale: 1.04 } : {}}
+          whileTap={!buying  && canAfford ? { scale: 0.96 } : {}}
+          className="px-5 py-2 rounded-lg text-sm transition-all disabled:cursor-not-allowed"
+          style={{
+            backgroundColor: ACCENT,
+            color: '#1a1b23',
+            fontWeight: 800,
+            opacity: buying || !canAfford ? 0.4 : 1,
+          }}
         >
           {buying      ? 'Buying...'         :
            !canAfford  ? 'Not enough coins'  : 'Buy'}
@@ -116,7 +129,8 @@ export default function Shop() {
       <motion.div
         animate={{ rotate: 360 }}
         transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-        className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full"
+        className="w-8 h-8 border-2 rounded-full"
+        style={{ borderColor: ACCENT, borderTopColor: 'transparent' }}
       />
     </div>
   )
@@ -128,8 +142,13 @@ export default function Shop() {
         animate={{ opacity: 1, y: 0 }}
         className="mb-8"
       >
-        <h1 className="text-2xl font-bold text-purple-400">Shop</h1>
-        <p className="text-gray-500 text-sm mt-1">Spend coins to get an edge</p>
+        <h1
+          className="text-2xl text-text-primary"
+          style={{ fontWeight: 800 }}
+        >
+          Shop
+        </h1>
+        <p className="text-text-muted text-sm mt-1">Spend coins to get an edge</p>
       </motion.div>
 
       <div className="flex flex-col gap-4">

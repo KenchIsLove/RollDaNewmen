@@ -2,6 +2,8 @@
 All roll logic lives here. The router layer only calls perform_roll().
 No roll result is ever accepted from the client.
 """
+from datetime import datetime, timedelta, timezone
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -9,6 +11,12 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from game_data import RARITIES, RARE_THRESHOLD_WEIGHT, RARITY_SCORES, server_roll
 from models import User, Character, Inventory, Upgrades, Stats, RollLog
 from schemas import RollOut
+
+# How long the client-side roll animation runs. Public feeds hide rolls
+# whose `revealed_at` is still in the future, so the result doesn't leak
+# into other players' "recent drops" before the roller has seen it.
+# Tune this to match the frontend animation duration.
+ROLL_ANIMATION_SECONDS = 6
 
 
 async def perform_roll(user: User, db: AsyncSession) -> RollOut:
@@ -31,8 +39,15 @@ async def perform_roll(user: User, db: AsyncSession) -> RollOut:
     )
     character = char_result.scalar_one()
 
-    # 4. Log this roll
-    db.add(RollLog(user_id=user.id, character_id=character.id))
+    # 4. Log this roll. `revealed_at` gates visibility in feeds — it's set
+    #    just past the spinner animation so other players can't peek before
+    #    the roller sees their own result.
+    revealed_at = datetime.now(timezone.utc) + timedelta(seconds=ROLL_ANIMATION_SECONDS)
+    db.add(RollLog(
+        user_id=user.id,
+        character_id=character.id,
+        revealed_at=revealed_at,
+    ))
 
     # 5. Upsert inventory (single statement, no race condition)
     await db.execute(

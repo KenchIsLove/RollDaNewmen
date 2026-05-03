@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
@@ -21,6 +21,9 @@ async def recent_drops(
         .join(RollLog, RollLog.user_id == User.id)
         .join(Character, Character.id == RollLog.character_id)
         .where(Character.weight <= _EPIC_WEIGHT)
+        # Hide rolls whose animation hasn't finished yet. NULL = legacy
+        # rows from before this column existed; treat as already revealed.
+        .where(or_(RollLog.revealed_at.is_(None), RollLog.revealed_at <= func.now()))
         .order_by(desc(RollLog.rolled_at))
         .limit(limit)
     )

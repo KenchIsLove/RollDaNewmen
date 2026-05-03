@@ -1,234 +1,235 @@
 import { useEffect, useState, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { motion, AnimatePresence, LayoutGroup } from 'framer-motion'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
-import { rarityText } from '../utils/rarity'
+import { rarityHex } from '../utils/rarity'
+import { CHAR_MAP } from '../utils/gameData'
 import { cn } from '../utils/cn'
-import { ALL_CHARACTERS } from '../utils/characters'
+import { summarizeItems, STATUS_LABEL, STATUS_COLOR } from '../utils/tradeFormat'
 import PageWrapper from '../components/PageWrapper'
 
-// ── Item selector ─────────────────────────────────────────────────────────────
+const ACCENT          = '#f59e42'
+const NEUTRAL_BORDER  = '#3d3e4a'
 
-function ItemSelector({ label, characters, items, onAdd, onRemove }) {
-  const [charName, setCharName] = useState('')
-  const [count,    setCount]    = useState(1)
+const TABS = [
+  { key: 'received', label: 'Received' },
+  { key: 'sent',     label: 'Sent' },
+  { key: 'history',  label: 'History' },
+]
 
-  function handleAdd() {
-    if (!charName) return
-    onAdd({ character_name: charName, count: Math.max(1, Number(count)) })
-    setCharName('')
-    setCount(1)
-  }
+function TradeRow({ trade, currentUsername, onCancel, cancelling }) {
+  const isReceiver = trade.receiver_username === currentUsername
+  const otherUser  = isReceiver ? trade.sender_username : trade.receiver_username
+  const offered    = trade.items.filter(i => i.type === 'offered')
+  const requested  = trade.items.filter(i => i.type === 'requested')
 
-  return (
-    <div>
-      <label className="block text-sm text-gray-400 mb-2">{label}</label>
-      <div className="flex gap-2 mb-2">
-        <select
-          value={charName}
-          onChange={e => setCharName(e.target.value)}
-          className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500 transition-colors"
-        >
-          <option value="">Select character...</option>
-          {characters.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <input
-          type="number"
-          min={1} max={999}
-          value={count}
-          onChange={e => setCount(e.target.value)}
-          className="w-20 shrink-0 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500 transition-colors"
-        />
-        <button
-          type="button"
-          onClick={handleAdd}
-          disabled={!charName}
-          className="shrink-0 px-3 py-2 bg-zinc-700 hover:bg-zinc-600 disabled:opacity-40 text-white text-sm rounded-lg transition-colors"
-        >
-          Add
-        </button>
-      </div>
-      <AnimatePresence>
-        {items.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="flex flex-wrap gap-1 overflow-hidden"
-          >
-            {items.map((item, i) => (
-              <motion.button
-                key={i}
-                type="button"
-                onClick={() => onRemove(i)}
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                whileHover={{ scale: 1.05 }}
-                className="text-xs px-2 py-1 bg-zinc-800 hover:bg-red-900/50 border border-zinc-700 hover:border-red-700 rounded text-gray-300 transition-colors"
-              >
-                {item.character_name} ×{item.count} ×
-              </motion.button>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  )
-}
-
-// ── Trade card ────────────────────────────────────────────────────────────────
-
-function TradeItems({ items, type }) {
-  const filtered = items.filter(i => i.type === type)
-  if (!filtered.length) return <span className="text-gray-700 text-sm">—</span>
-  return (
-    <div className="flex flex-wrap gap-1">
-      {filtered.map((item, i) => (
-        <span key={i} className={cn('text-xs px-2 py-1 bg-zinc-800 rounded border border-zinc-700', rarityText(item.rarity))}>
-          {item.character_name} ×{item.count}
-        </span>
-      ))}
-    </div>
-  )
-}
-
-function TradeCard({ trade, username, onRefresh, index }) {
-  const [acting,   setActing]   = useState(false)
-  const isReceiver = trade.receiver_username === username
-  const isSender   = trade.sender_username   === username
-
-  async function doAction(fn) {
-    setActing(true)
-    try { await fn(); onRefresh() }
-    finally { setActing(false) }
-  }
+  // Show up to 4 thumbnails on the row — enough to convey the trade
+  // without overwhelming the layout.
+  const thumbs = (isReceiver ? offered : offered).slice(0, 4)
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -8, scale: 0.97 }}
-      transition={{ type: 'spring', stiffness: 220, damping: 24, delay: index * 0.05 }}
-      className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4"
+    <Link
+      to={`/trades/${trade.id}`}
+      className="block bg-card rounded-xl p-4 transition-all hover:-translate-y-0.5"
+      style={{ border: `2px solid ${NEUTRAL_BORDER}` }}
     >
-      <div className="flex justify-between items-start mb-3">
-        <div className="text-sm">
-          <span className="text-white font-medium">{trade.sender_username}</span>
-          <span className="text-gray-600 mx-1">→</span>
-          <span className="text-white font-medium">{trade.receiver_username}</span>
-          {isReceiver && <span className="ml-2 text-xs text-purple-400 font-medium">(incoming)</span>}
-          {isSender   && <span className="ml-2 text-xs text-gray-600 font-medium">(sent)</span>}
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div
+            className="w-10 h-10 rounded-full flex items-center justify-center text-base shrink-0"
+            style={{ backgroundColor: ACCENT, color: '#1a1b23', fontWeight: 800 }}
+          >
+            {otherUser?.[0]?.toUpperCase() ?? '?'}
+          </div>
+          <div className="min-w-0">
+            <div className="text-text-primary truncate" style={{ fontWeight: 700 }}>
+              {isReceiver ? 'From ' : 'To '}
+              <span className="text-accent">{otherUser}</span>
+            </div>
+            <div className="text-text-muted text-xs mt-0.5">
+              {new Date(trade.created_at).toLocaleString([], {
+                dateStyle: 'medium', timeStyle: 'short',
+              })}
+            </div>
+          </div>
         </div>
-        <span className="text-xs text-gray-700 shrink-0 ml-3">
-          {new Date(trade.created_at).toLocaleDateString()}
+
+        <span
+          className="text-[10px] uppercase px-2 py-0.5 rounded shrink-0"
+          style={{
+            color: STATUS_COLOR[trade.status],
+            border: `1.5px solid ${STATUS_COLOR[trade.status]}`,
+            fontWeight: 800,
+            letterSpacing: '0.5px',
+          }}
+        >
+          {STATUS_LABEL[trade.status] ?? trade.status}
         </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 mb-4">
+      {/* Thumbnail strip: shows the offered side as art, plus a textual summary */}
+      <div className="flex items-center gap-2 mb-2">
+        {thumbs.map((item, i) => {
+          const img = CHAR_MAP[item.character_name]?.image
+          const color = rarityHex(item.rarity)
+          return (
+            <div
+              key={i}
+              className="w-9 h-9 rounded bg-surface flex items-center justify-center shrink-0"
+              style={{ border: `2px solid ${color}` }}
+              title={`${item.character_name} ×${item.count}`}
+            >
+              {img ? (
+                <img src={img} alt="" className="w-7 h-7 object-contain" />
+              ) : (
+                <span className="text-[10px]" style={{ color, fontWeight: 800 }}>
+                  {item.character_name[0]}
+                </span>
+              )}
+            </div>
+          )
+        })}
+        {offered.length > thumbs.length && (
+          <span className="text-text-muted text-xs">+{offered.length - thumbs.length}</span>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs">
         <div>
-          <div className="text-xs text-gray-600 mb-1.5">Offering</div>
-          <TradeItems items={trade.items} type="offered" />
+          <span
+            className="uppercase mr-1"
+            style={{ color: '#22c55e', fontWeight: 700, letterSpacing: '0.5px' }}
+          >
+            Offering:
+          </span>
+          <span className="text-text-secondary">
+            {summarizeItems(trade.items, 'offered')}
+          </span>
         </div>
         <div>
-          <div className="text-xs text-gray-600 mb-1.5">Requesting</div>
-          <TradeItems items={trade.items} type="requested" />
+          <span
+            className="uppercase mr-1"
+            style={{ color: ACCENT, fontWeight: 700, letterSpacing: '0.5px' }}
+          >
+            Requesting:
+          </span>
+          <span className="text-text-secondary">
+            {summarizeItems(trade.items, 'requested')}
+          </span>
         </div>
       </div>
 
-      <div className="flex gap-2">
-        {isReceiver && (
-          <>
-            <motion.button
-              whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
-              onClick={() => doAction(() => api.acceptTrade(trade.id))}
-              disabled={acting}
-              className="px-4 py-1.5 bg-green-800 hover:bg-green-700 disabled:opacity-50 text-white text-sm rounded-lg transition-colors"
-            >
-              Accept
-            </motion.button>
-            <motion.button
-              whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
-              onClick={() => doAction(() => api.declineTrade(trade.id))}
-              disabled={acting}
-              className="px-4 py-1.5 bg-red-900 hover:bg-red-800 disabled:opacity-50 text-white text-sm rounded-lg transition-colors"
-            >
-              Decline
-            </motion.button>
-          </>
-        )}
-        {isSender && (
-          <motion.button
-            whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}
-            onClick={() => doAction(() => api.cancelTrade(trade.id))}
-            disabled={acting}
-            className="px-4 py-1.5 bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 text-white text-sm rounded-lg transition-colors"
+      {trade.status === 'pending' && !isReceiver && onCancel && (
+        <div className="flex justify-end mt-3">
+          <button
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              onCancel(trade.id)
+            }}
+            disabled={cancelling}
+            className="text-xs px-3 py-1 rounded-lg transition-all disabled:opacity-50"
+            style={{
+              background: 'transparent',
+              border: '1.5px solid #ef4444',
+              color: '#ef4444',
+              fontWeight: 700,
+            }}
           >
-            Cancel
-          </motion.button>
-        )}
-      </div>
-    </motion.div>
+            {cancelling ? 'Cancelling…' : 'Cancel Trade'}
+          </button>
+        </div>
+      )}
+    </Link>
   )
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
+function EmptyState({ tab }) {
+  const messages = {
+    received: { emoji: '📭', text: 'No incoming trades. When someone sends you an offer, it shows up here.' },
+    sent:     { emoji: '📤', text: "You haven't sent any trades yet. Hit New Trade to start one." },
+    history:  { emoji: '🗄️', text: 'No completed trades yet.' },
+  }
+  const m = messages[tab] ?? messages.received
+  return (
+    <div className="text-center py-16">
+      <div className="text-5xl mb-3" aria-hidden="true">{m.emoji}</div>
+      <p className="text-text-muted">{m.text}</p>
+    </div>
+  )
+}
 
 export default function Trades() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const initialTab = TABS.find(t => t.key === searchParams.get('tab'))?.key ?? 'received'
+
+  const [tab,        setTab]        = useState(initialTab)
   const [trades,     setTrades]     = useState([])
+  const [counts,     setCounts]     = useState({ received: 0, sent: 0, history: 0 })
   const [loading,    setLoading]    = useState(true)
-  const [showForm,   setShowForm]   = useState(false)
-  const [inventory,  setInventory]  = useState([])
-  const [receiver,   setReceiver]   = useState('')
-  const [offered,    setOffered]    = useState([])
-  const [requested,  setRequested]  = useState([])
-  const [submitting, setSubmitting] = useState(false)
+  const [cancelling, setCancelling] = useState(null)
+
   const { username } = useAuth()
   const { addToast } = useToast()
+  const navigate = useNavigate()
 
-  const loadTrades = useCallback(() =>
-    api.listTrades()
-      .then(setTrades)
-      .catch(err => addToast(err.message, 'error'))
-  , []) // eslint-disable-line react-hooks/exhaustive-deps
+  const loadTab = useCallback(async (which) => {
+    setLoading(true)
+    try {
+      const data = await api.listTrades(which)
+      setTrades(Array.isArray(data) ? data : [])
+    } catch (err) {
+      addToast(err.message, 'error')
+      setTrades([])
+    } finally {
+      setLoading(false)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Refresh per-tab counts so the badges in the tab bar are accurate.
+  // One light request per tab — totals only.
+  const refreshCounts = useCallback(async () => {
+    try {
+      const [received, sent, history] = await Promise.all([
+        api.listTrades('received'),
+        api.listTrades('sent'),
+        api.listTrades('history'),
+      ])
+      setCounts({
+        received: received.length,
+        sent:     sent.length,
+        history:  history.length,
+      })
+    } catch {
+      /* noop — leave previous counts visible */
+    }
+  }, [])
 
   useEffect(() => {
-    loadTrades().finally(() => setLoading(false))
-  }, [loadTrades])
+    loadTab(tab)
+    refreshCounts()
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      next.set('tab', tab)
+      return next
+    }, { replace: true })
+  }, [tab, loadTab, refreshCounts, setSearchParams])
 
-  async function handleToggleForm() {
-    if (!showForm) {
-      const inv = await api.myInventory().catch(() => ({ items: [] }))
-      setInventory(inv.items ?? [])
-    }
-    setShowForm(v => !v)
-  }
-
-  function resetForm() {
-    setReceiver(''); setOffered([]); setRequested([]); setShowForm(false)
-  }
-
-  async function handleSubmit(e) {
-    e.preventDefault()
-    if (offered.length === 0 && requested.length === 0) {
-      addToast('Add at least one item to the trade', 'error')
-      return
-    }
-    setSubmitting(true)
+  async function handleCancel(id) {
+    setCancelling(id)
     try {
-      await api.createTrade({ receiver_username: receiver, offered, requested })
-      addToast('Trade sent!', 'success')
-      resetForm()
-      await loadTrades()
+      await api.cancelTrade(id)
+      addToast('Trade cancelled', 'success')
+      await loadTab(tab)
+      refreshCounts()
     } catch (err) {
       addToast(err.message, 'error')
     } finally {
-      setSubmitting(false)
+      setCancelling(null)
     }
   }
-
-  const inventoryNames = inventory.map(i => i.character_name)
 
   return (
     <PageWrapper>
@@ -236,7 +237,8 @@ export default function Trades() {
         <motion.h1
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-2xl font-bold text-purple-400"
+          className="text-2xl text-text-primary"
+          style={{ fontWeight: 800 }}
         >
           Trades
         </motion.h1>
@@ -245,104 +247,106 @@ export default function Trades() {
           animate={{ opacity: 1 }}
           whileHover={{ scale: 1.04 }}
           whileTap={{ scale: 0.96 }}
-          onClick={handleToggleForm}
-          className={cn(
-            'px-4 py-2 text-sm rounded-lg font-medium transition-colors',
-            showForm
-              ? 'bg-zinc-700 hover:bg-zinc-600 text-gray-300'
-              : 'bg-gradient-to-r from-purple-700 to-violet-600 hover:from-purple-600 hover:to-violet-500 text-white',
-          )}
+          onClick={() => navigate('/trades/new')}
+          className="px-4 py-2 text-sm rounded-lg transition-all"
+          style={{ backgroundColor: ACCENT, color: '#1a1b23', fontWeight: 800 }}
         >
-          {showForm ? 'Cancel' : '+ New Trade'}
+          + New Trade
         </motion.button>
       </div>
 
-      {/* Create trade form */}
-      <AnimatePresence>
-        {showForm && (
-          <motion.form
-            onSubmit={handleSubmit}
-            initial={{ opacity: 0, height: 0, y: -12 }}
-            animate={{ opacity: 1, height: 'auto', y: 0 }}
-            exit={{ opacity: 0, height: 0, y: -12 }}
-            transition={{ type: 'spring', stiffness: 260, damping: 28 }}
-            className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 mb-6 flex flex-col gap-5 overflow-hidden"
-          >
-            <h2 className="font-semibold text-white">New Trade</h2>
-
-            <div>
-              <label className="block text-sm text-gray-400 mb-1.5">Send to</label>
-              <input
-                type="text"
-                value={receiver}
-                onChange={e => setReceiver(e.target.value)}
-                required
-                placeholder="Username"
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-purple-500 transition-colors"
-              />
-            </div>
-
-            <ItemSelector
-              label="You Offer (from your inventory)"
-              characters={inventoryNames.length ? inventoryNames : ALL_CHARACTERS}
-              items={offered}
-              onAdd={item => setOffered(prev => [...prev, item])}
-              onRemove={i => setOffered(prev => prev.filter((_, idx) => idx !== i))}
-            />
-
-            <ItemSelector
-              label="You Request"
-              characters={ALL_CHARACTERS}
-              items={requested}
-              onAdd={item => setRequested(prev => [...prev, item])}
-              onRemove={i => setRequested(prev => prev.filter((_, idx) => idx !== i))}
-            />
-
-            <motion.button
-              type="submit"
-              disabled={submitting}
-              whileHover={!submitting ? { scale: 1.02 } : {}}
-              whileTap={!submitting  ? { scale: 0.97 } : {}}
-              className="w-full bg-gradient-to-r from-purple-700 to-violet-600 hover:from-purple-600 hover:to-violet-500 disabled:opacity-50 text-white py-2.5 rounded-lg text-sm font-medium transition-all"
-            >
-              {submitting ? 'Sending...' : 'Send Trade'}
-            </motion.button>
-          </motion.form>
-        )}
-      </AnimatePresence>
-
-      {/* Trade list */}
-      {loading ? (
-        <div className="flex justify-center py-16">
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-            className="w-7 h-7 border-2 border-purple-500 border-t-transparent rounded-full"
-          />
-        </div>
-      ) : !trades.length ? (
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="text-center text-gray-600 py-16"
+      {/* Tabs with count badges + orange underline */}
+      <LayoutGroup>
+        <div
+          className="flex gap-1 mb-6 overflow-x-auto md:flex-wrap pb-1 -mx-3 px-3 sm:mx-0 sm:px-0"
+          style={{ borderBottom: `1px solid ${NEUTRAL_BORDER}` }}
         >
-          No pending trades.
-        </motion.p>
-      ) : (
-        <AnimatePresence>
-          <div className="flex flex-col gap-3">
-            {trades.map((trade, i) => (
-              <TradeCard
-                key={trade.id}
-                trade={trade}
-                username={username}
-                onRefresh={loadTrades}
-                index={i}
+          {TABS.map(t => {
+            const active = tab === t.key
+            const count  = counts[t.key]
+            return (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className="relative shrink-0 px-3 sm:px-4 py-2.5 text-sm transition-colors whitespace-nowrap flex items-center gap-2"
+                style={{
+                  color: active ? ACCENT : '#8b8b98',
+                  fontWeight: active ? 700 : 500,
+                }}
+              >
+                <span className="relative z-10">{t.label}</span>
+                <span
+                  className="text-[11px] px-1.5 py-0.5 rounded tabular-nums"
+                  style={{
+                    backgroundColor: active ? ACCENT : '#2d2e3a',
+                    color: active ? '#1a1b23' : '#8b8b98',
+                    fontWeight: 800,
+                    minWidth: 20,
+                    textAlign: 'center',
+                  }}
+                >
+                  {count}
+                </span>
+                {active && (
+                  <motion.div
+                    layoutId="trades-tab-underline"
+                    className="absolute left-0 right-0 -bottom-px h-[2px]"
+                    style={{ backgroundColor: ACCENT }}
+                    transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                  />
+                )}
+              </button>
+            )
+          })}
+        </div>
+      </LayoutGroup>
+
+      <AnimatePresence mode="wait">
+        {loading ? (
+          <motion.div
+            key="loading"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="flex justify-center py-16"
+          >
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+              className="w-7 h-7 border-2 rounded-full"
+              style={{ borderColor: ACCENT, borderTopColor: 'transparent' }}
+            />
+          </motion.div>
+        ) : trades.length === 0 ? (
+          <motion.div
+            key={`empty-${tab}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <EmptyState tab={tab} />
+          </motion.div>
+        ) : (
+          <motion.div
+            key={tab}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className={cn('flex flex-col gap-3')}
+          >
+            {trades.map(t => (
+              <TradeRow
+                key={t.id}
+                trade={t}
+                currentUsername={username}
+                onCancel={tab === 'sent' ? handleCancel : null}
+                cancelling={cancelling === t.id}
               />
             ))}
-          </div>
-        </AnimatePresence>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </PageWrapper>
   )
 }

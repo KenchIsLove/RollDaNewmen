@@ -1,9 +1,10 @@
 import uuid
 from datetime import datetime
 from sqlalchemy import (
-    String, Integer, BigInteger, ForeignKey, DateTime,
-    UniqueConstraint, CheckConstraint, Index, func,
+    String, Integer, BigInteger, ForeignKey, DateTime, Text,
+    UniqueConstraint, CheckConstraint, Index, func, text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from database import Base
 
@@ -23,8 +24,14 @@ class User(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     avatar_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    bio: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    bio: Mapped[str | None] = mapped_column(String(2000), nullable=True)
     banner_color: Mapped[str] = mapped_column(String(7), server_default='#7c3aed', nullable=False)
+    display_title: Mapped[str] = mapped_column(String(60), server_default='', nullable=False)
+    banner_image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    theme_preset: Mapped[str] = mapped_column(String(20), server_default='midnight', nullable=False)
+    showcase_character_ids: Mapped[list[int]] = mapped_column(
+        JSONB, server_default=text("'[]'::jsonb"), default=list, nullable=False,
+    )
 
     upgrades: Mapped["Upgrades"] = relationship(
         "Upgrades", back_populates="user", uselist=False, cascade="all, delete-orphan"
@@ -133,6 +140,13 @@ class RollLog(Base):
     character_id: Mapped[int] = mapped_column(ForeignKey("characters.id"), nullable=False)
     rolled_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    # Visibility gate: feeds (recent drops, /rolls/me) hide rows whose
+    # `revealed_at` is in the future. Lets the spinner animation finish
+    # before other players can see the result. NULL means "already revealed"
+    # (rows from before this column existed).
+    revealed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
     user: Mapped["User"] = relationship("User")

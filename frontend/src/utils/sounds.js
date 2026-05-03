@@ -6,14 +6,35 @@ function getCtx() {
   return ctx
 }
 
-function playNote(c, freq, time, duration, vol = 0.2, type = 'triangle') {
+export const SFX_VOLUME_KEY = 'sfx_volume'
+export const SFX_VOLUME_DEFAULT = 80
+
+export function getSfxVolume() {
+  try {
+    const stored = localStorage.getItem(SFX_VOLUME_KEY)
+    if (stored === null) return SFX_VOLUME_DEFAULT
+    const n = parseInt(stored, 10)
+    if (Number.isNaN(n)) return SFX_VOLUME_DEFAULT
+    return Math.max(0, Math.min(100, n))
+  } catch {
+    return SFX_VOLUME_DEFAULT
+  }
+}
+
+function getVol() {
+  return getSfxVolume() / 100
+}
+
+function playNote(c, freq, time, duration, baseVol = 0.2, type = 'triangle') {
+  const v = baseVol * getVol()
+  if (v <= 0) return
   const osc = c.createOscillator()
   const gain = c.createGain()
   osc.connect(gain)
   gain.connect(c.destination)
   osc.type = type
   osc.frequency.setValueAtTime(freq, time)
-  gain.gain.setValueAtTime(vol, time)
+  gain.gain.setValueAtTime(v, time)
   gain.gain.exponentialRampToValueAtTime(0.001, time + duration)
   osc.start(time)
   osc.stop(time + duration + 0.01)
@@ -21,6 +42,8 @@ function playNote(c, freq, time, duration, vol = 0.2, type = 'triangle') {
 
 // Deep thump when pressing the open button
 export function playClick() {
+  const v = getVol()
+  if (v <= 0) return
   try {
     const c = getCtx()
     const t = c.currentTime
@@ -31,7 +54,7 @@ export function playClick() {
     osc.type = 'sine'
     osc.frequency.setValueAtTime(110, t)
     osc.frequency.exponentialRampToValueAtTime(45, t + 0.09)
-    gain.gain.setValueAtTime(0.45, t)
+    gain.gain.setValueAtTime(0.45 * v, t)
     gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1)
     osc.start(t)
     osc.stop(t + 0.11)
@@ -40,6 +63,8 @@ export function playClick() {
 
 // Deep low thud per card crossing the center
 export function playTick() {
+  const v = getVol()
+  if (v <= 0) return
   try {
     const c = getCtx()
     const t = c.currentTime
@@ -50,7 +75,7 @@ export function playTick() {
     osc.type = 'sine'
     osc.frequency.setValueAtTime(180, t)
     osc.frequency.exponentialRampToValueAtTime(70, t + 0.035)
-    gain.gain.setValueAtTime(0.3, t)
+    gain.gain.setValueAtTime(0.3 * v, t)
     gain.gain.exponentialRampToValueAtTime(0.001, t + 0.04)
     osc.start(t)
     osc.stop(t + 0.045)
@@ -68,6 +93,7 @@ const REVEAL_RANK = {
 // Deep horn-like fanfare that scales with rarity
 // Notes are all in the low register (C3=130, E3=165, G3=196, C4=262, E4=330, G4=392)
 export function playReveal(rarity) {
+  if (getVol() <= 0) return
   try {
     const c = getCtx()
     const t = c.currentTime
